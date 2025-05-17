@@ -1,0 +1,162 @@
+La target est class, 7 features.
+
+data_plot.png, correlations.png : grosses corrélations entre 
+- Area et ConvexArea
+- Area et Perimeter
+- MajorAxisLength et Perimeter
+- ConvexArea et Perimeter
+
+equilibre_des_classes.png : pas de classe inbalance, bonne nouvelle.
+
+
+### qualité de représentation
+V$cos2
+V$cor^2
+
+# corrélation
+V$cor
+cbind(G1,G2)
+
+#contribution à l'axe
+V$contrib
+V$cos2[,1]/sum(V$cos2[,1])
+
+#visualisation
+# par(mfrow=c(1,2))  # pour partager l'écran en deux dans une représentation classique
+plt1 = plot(data_pca,axes = c(1,2), choix = "var")
+plt2 = plot(data_pca,axes = c(2,3), choix = "var")
+cowplot::plot_grid(plt1, plt2, ncol = 2, nrow = 1)
+# axe 1 = effet taille
+# axe 2 = opposition asymetrie - compacité
+# axe 3 = compacité + asymétrie 
+
+#######
+## c- individus et étude simultanée individus/variables dans le premier plan
+#######
+plt1 = plot(data_pca,axes = c(1,2), choix = "ind",label="none")
+plt2 = plot(data_pca,axes = c(1,2), choix = "var")
+cowplot::plot_grid(plt1, plt2, ncol = 2, nrow = 1)
+# Dans le premier quadrant droit, individus plutôt grands et asymétriques; 
+# à gauche en haut, individus petits et asymétriques, 
+# en bas au centre, de taille moyenne et réguliers
+
+
+### i- on qualifie certains individus visuellement
+Ind = data_pca$ind
+indi = c(19,39,58,89,90,95,178)
+plt1 = plt1 + aes(x=Ind$coord[indi,1], y=Ind$coord[indi,2]) +
+  geom_point(col="red", size=2)+
+  geom_text(label=indi,col=2,nudge_y = 0.1)
+plt1
+# points(Ind$coord[indi,1],Ind$coord[indi,2],col="red",pch=20)
+# text(Ind$coord[indi,1],Ind$coord[indi,2],as.character(indi),pos=3,cex=0.7,col=2)
+
+
+## on regarde maintenant les valeurs numériques
+### ii- contributions
+apply(Ind$contrib,2,which.max)   # le plus contributif sur chaque axe
+# Dim.1 Dim.2 Dim.3 Dim.4 Dim.5 
+# 89    19   204    60    60
+head(sort(Ind$contrib[, 1],decreasing=TRUE)) # les premiers contibutifs du premier axe
+#      89       90      115       78      109       91 
+#1.895966 1.863653 1.833128 1.652143 1.628947 1.628354 
+
+### iii- cosinus carré : qualité de représentration
+which.max(Ind$cos2[,2]) #58
+
+#######
+## d- plan (2,3)
+#######
+
+plt3 = plot(data_pca,axes = c(2,3), choix = "ind",label="none")+ 
+  aes(x=Ind$coord[indi,2], y=Ind$coord[indi,3]) +
+  geom_point(col="red", size=2)+
+  geom_text(label=indi,col=2,nudge_y = 0.1)
+plt4 = plot(data_pca,axes = c(2,3), choix = "var")
+cowplot::plot_grid(plt3,plt4)
+# points(Ind$coord[indi,2],Ind$coord[indi,3],col="red",pch=20)
+# text(data_pca$ind$coord[indi,2],data_pca$ind$coord[indi,3],as.character(indi),pos=3,cex=0.7,col=2)
+
+### i- contributif et mal représenté sur l'axe 3
+which(data_pca$ind$cos2[,3]<0.15 & data_pca$ind$contrib[,3]>1)
+# 84  89  91 117 129 158 
+# 84  89  91 117 129 158
+c(contrib=Ind$contrib[89,3],cos2= Ind$cos2[89,3])
+#    contrib       cos2 
+# 1.10679855 0.06613445 
+
+# globalement sur le plan (2,3)
+# contribution sur le plan: utiliser coord, car contrib normé à 100 par axe
+mean(data_pca$ind$coord[,2]^2+data_pca$ind$coord[,3]^2)  # 1.87 projection moyenne sur le plan
+mean(data_pca$ind$cos2[,2]+data_pca$ind$cos2[,3])        # 0.36 qualité de représentation sur la plan
+
+# on cherche des points de  qualité < moyenne et de contrib > moyenne
+
+indj = which(data_pca$ind$cos2[,2]+data_pca$ind$cos2[,3]<0.15 & (data_pca$ind$coord[,2]^2+data_pca$ind$coord[,3]^2)>2)
+plt1 = plt1 + 
+  geom_point(aes(x=Ind$coord[indj,1], y=Ind$coord[indj,2]), col="purple", size=2)+
+  geom_text(aes(x=Ind$coord[indj,1], y=Ind$coord[indj,2]), label=indj,col="purple",nudge_y = 0.1)
+plt3 = plt3 + 
+  geom_point(aes(x=Ind$coord[indj,2], y=Ind$coord[indj,3]), col="purple", size=2)+
+  geom_text(aes(x=Ind$coord[indj,2], y=Ind$coord[indj,3]), label=indj,col="purple",nudge_y = 0.1)
+cowplot::plot_grid(plt1,plt3)
+
+
+### ii. peu contributif mais bien représenté sur l'axe 2
+which(data_pca$ind$cos2[,2]>0.85 & data_pca$ind$contrib[,2]<0.25) #39
+c(contrib=Ind$contrib[39,2],cos2= Ind$cos2[39,2])
+
+### iii.  contributif et bien représenté sur l'axe 2
+which(data_pca$ind$cos2[,2]>0.95 & data_pca$ind$contrib[,2]>0.85) #58
+c(contrib=Ind$contrib[58,2],cos2= Ind$cos2[58,2])
+
+### tous les plots
+# par(mfrow=c(2,2))
+cowplot::plot_grid(plt1, plt2, plt3, plt4, ncol = 2, nrow = 2)
+
+#######
+## e- Individus supplémentaidata_pca 
+#######
+### 
+# ici, points moyens de chaque variété
+df= as.data.frame(lapply(seeds,
+                         function(x){tapply(x,seeds$variety,mean)} 
+                         ))
+indsup= nrow(seeds)+ 1:3
+seeds[indsup,] = df
+
+data_pca = PCA(seeds[,-p],  ind.sup=indsup, graph=FALSE)
+plt1 = plot(data_pca,axes=c(1,2),choix="ind",label="ind.sup")
+plt2 = plot(data_pca,axes=c(2,3),choix="ind",label="ind.sup")
+cowplot::plot_grid(plt1, plt2, nrow=1, ncol=2)
+
+#######
+## e- variable qualitative 
+#######
+
+seeds$variety = as.factor(seeds$variety)
+data_pca = PCA(seeds, quali.sup=p,graph=FALSE)
+plt1 = plot(data_pca,axes=c(1,2),choix="ind",label="quali", habillage=p) +
+  theme(legend.position = "none") +
+  geom_point(aes(x=data_pca$ind.sup$coord[,1], y=data_pca$ind.sup$coord[,2]), col="blue")
+plt2 = plot(data_pca,axes=c(2,3),choix="ind",label="quali", habillage=p) +
+  geom_point(aes(x=data_pca$ind.sup$coord[,2], y=data_pca$ind.sup$coord[,3]), col="blue")
+cowplot::plot_grid(plt1, plt2, nrow=1, ncol=2)
+
+# on vérifie que les individus supplémentaidata_pca cordata_pcapondent 
+# à la visualisation de la variable qualitative supplémentaire
+
+
+
+### Diagonaliser Corr et ne garder que les plus grandes vp
+### Projeter dans l'espace décorrelé
+### Eventuellement nuage des individus à la fin
+### Calculer les indicateurs
+
+
+
+
+### variables et cercles des corrélations
+V <- data_pca$var
+plot(data_pca, choix = "var")
+
