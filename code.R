@@ -3,10 +3,14 @@ library(ggplot2)
 library(readxl)
 library(corrplot)
 library(FactoMineR) # pour le PCA automatique
+library(ggdendro) # pour le dendrogramme version ggplot
+library(GGally) # pour ggpairs
 
 # Partie 1 : analyse non supervisée
 
+
 ## Analyse descriptive
+
 
 ### Lecture du dataset :
 data <- read_excel("Raisin.xlsx")
@@ -14,13 +18,15 @@ dimension <- dim(data)
 n <- dimension[1]
 p <- dimension[2]
 entete <- head(data)
-data_pcaume <- summary(data)
+description <- summary(data)
 ### Quelques graphiques pour comprendre le dataset :
-data_plot <- plot(data, col = as.factor(data$Class))
+data_plot <- ggpairs(data[, -p], mapping = aes(color = data$Class))
 equilibre_des_classes <- ggplot(data = data, aes(x = Class)) + geom_bar(stat = "count")
-plot_correlations <- corrplot(cor(data[, -p]), method = "circle")
+corrplot(cor(data[, -p]), method = "circle")
+
 
 ## ACP
+
 
 ### Centrer et réduire
 data_cr <- scale(data[, -p], center = TRUE, scale = TRUE) / sqrt((n - 1) / n)
@@ -34,22 +40,68 @@ vp_corr <- data.frame(
   Dim = paste("Dim", 1:nrow(data_pca$eig)),     # paste = concaténation de vecteurs
   Inertie = data_pca$eig[, 2]
 )
-vp_pca <- ggplot(vp_corr) +
+graphique_inertie_pca <- ggplot(vp_corr) +
   geom_col(aes(x = Dim, y = Inertie)) +
   geom_hline(yintercept = 100 / 7) +
   labs(title = "% inertie", x = "Dimensions", y = "Inertie") # on ne garde que les deux premiers axes principaux
 ### Variables et cercle des corrélations
 variables_pca <- data_pca$var
 ### qualité de représentation
-cos2_variables_pca <- V$cos2
+cos2_variables_pca <- data_pca$cos2
 ### corrélation
-correlations_variables_pca <- V$cor
+correlations_variables_pca <- data_pca$cor
 ###contribution à l'axe
-contribution_pca <- V$contrib
-### visualisation simultanée individus/variables dans le premier plan
-plt1 <- plot(data_pca, axes = c(1, 2), choix = "ind", label = "none")
-plt2 <- plot(data_pca, axes = c(1, 2), choix = "var")
-ggsave("premier_plan_pca.png", cowplot::plot_grid(plt1, plt2, ncol = 2, nrow = 1))
+contribution_pca <- data_pca$contrib
+### visualisation individus et variables dans le premier plan
+plot(data_pca,axes = c(1,2), choix = "ind",label="none")
+plot(data_pca,axes = c(1,2), choix = "var")
 
 
-## Clustering par Classification hiérarchique ascendante
+## CAH
+
+
+### CAH (méthode complète avec la distance euclidienne)
+cah <- hclust(dist(data_cr)) # il faut prendre le dataset centré réduit, sinon cela fausse les distances
+dendrogramme <- ggdendrogram(cah, rotate = TRUE)
+barplot(rev(cah$height)[1:15], main = "diagramme des hauteurs")
+# au vu de l'allure du dendrogramme, choisir 3 groupes semble pertinent.
+groupes_cah <- cutree(cah, k = 2)
+# Matrice de confusion entre les groupes trouvés et les vraies classes
+confusion <- table(Groupes = groupes_cah, ClasseReelle = data$Class) # la classification semble mauvaise !
+# Calcul de l'erreur de classification
+table_correspondances <- table(groupes_cah, data$Class)
+# Si groupe 1 = Kecimen et groupe 2 = Besni
+erreur1 <- 1 - (table_correspondances[1, "Kecimen"] + table_correspondances[2, "Besni"]) / sum(table_correspondances)
+# Si groupe 1 = Besni et groupe 2 = Kecimen
+erreur2 <- 1 - (table_correspondances[1, "Besni"] + table_correspondances[2, "Kecimen"]) / sum(table_correspondances)
+# On prend la plus petite des erreurs
+erreur <- min(erreur1, erreur2)
+
+
+
+## CAH sur les k premières composantes principales
+
+
+erreurs_k <- c()
+for (k in 1:5) {
+  coord_k <- data_pca$ind$coord[, 1:k] # les k premières composantes principales
+  cah_k <- hclust(dist(coord_k))
+  groupes_k <- cutree(cah_k, k = 2)
+  table_correspondances <- table(groupes_k, data$Class)
+  erreur1 <- 1 - (table_correspondances[1, "Kecimen"] + table_correspondances[2, "Besni"]) / sum(table_correspondances)
+  erreur2 <- 1 - (table_correspondances[1, "Besni"] + table_correspondances[2, "Kecimen"]) / sum(table_correspondances)
+  erreur_k <- min(erreur1, erreur2)
+  erreurs_k <- c(erreurs_k, erreur_k)
+}
+
+# Affichage de l’erreur en fonction de k
+png("t.png")
+plot(1:5, erreurs_k, type = "b", pch = 19,
+     xlab = "Nombre de composantes principales (k)",
+     ylab = "Erreur de classification",
+     main = "Erreur de classification selon k")
+dev.off()
+
+cat("Erreur 2 groupes sans ACP :", erreur, ". Erreur 2 groupes avec ACP : ", erreurs_k[2])
+meilleur_k <- which.min(erreurs_k)
+cat("\nk optimal =", meilleur_k, "avec une erreur de", round(erreurs_k[meilleur_k], 3))

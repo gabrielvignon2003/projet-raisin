@@ -9,154 +9,156 @@ data_plot.png, correlations.png : grosses corrélations entre
 equilibre_des_classes.png : pas de classe inbalance, bonne nouvelle.
 
 
-### qualité de représentation
-V$cos2
-V$cor^2
-
-# corrélation
-V$cor
-cbind(G1,G2)
-
-#contribution à l'axe
-V$contrib
-V$cos2[,1]/sum(V$cos2[,1])
-
-#visualisation
-# par(mfrow=c(1,2))  # pour partager l'écran en deux dans une représentation classique
-plt1 = plot(data_pca,axes = c(1,2), choix = "var")
-plt2 = plot(data_pca,axes = c(2,3), choix = "var")
-cowplot::plot_grid(plt1, plt2, ncol = 2, nrow = 1)
-# axe 1 = effet taille
-# axe 2 = opposition asymetrie - compacité
-# axe 3 = compacité + asymétrie 
-
-#######
-## c- individus et étude simultanée individus/variables dans le premier plan
-#######
-plt1 = plot(data_pca,axes = c(1,2), choix = "ind",label="none")
-plt2 = plot(data_pca,axes = c(1,2), choix = "var")
-cowplot::plot_grid(plt1, plt2, ncol = 2, nrow = 1)
-# Dans le premier quadrant droit, individus plutôt grands et asymétriques; 
-# à gauche en haut, individus petits et asymétriques, 
-# en bas au centre, de taille moyenne et réguliers
 
 
-### i- on qualifie certains individus visuellement
-Ind = data_pca$ind
-indi = c(19,39,58,89,90,95,178)
-plt1 = plt1 + aes(x=Ind$coord[indi,1], y=Ind$coord[indi,2]) +
-  geom_point(col="red", size=2)+
-  geom_text(label=indi,col=2,nudge_y = 0.1)
-plt1
-# points(Ind$coord[indi,1],Ind$coord[indi,2],col="red",pch=20)
-# text(Ind$coord[indi,1],Ind$coord[indi,2],as.character(indi),pos=3,cex=0.7,col=2)
+########
+###---c- représentation graphique
+########
+library(FactoMineR)
+
+# on fait la visu "à la main"
+res.pca2 = PCA(cbind(seeds,grp=as.factor(variety)), 
+               quali.sup = 8, graph=FALSE)
+plot(res.pca2,habillage=8)
+plot(res.pca2,axes=2:3,habillage=8)
+
+# visu des classifications de 2 à 5 groupes
+ 
+# on sauvegarde l'environnement avant le changement de marge
+old.par <- par(no.readonly = TRUE)
+# pour profiter au maximum de l'espace disponible
+par (mfrow=c(2,2), mai=c(0.7,0.7,0.4,0.2))
+
+for (i in 2:5) {
+  grp = cutree(res1,h=rev(res1$height)[i])
+  plot(res.pca2$ind$coord[,1],res.pca2$ind$coord[,2],
+       col=grp, pch=grp,
+       main=paste("nb de groupes=",i),
+       xlim=c(-4,5),ylim=c(-4,4),cex=0.5,xlab="Dim 1",ylab="Dim 2")
+}
+
+# puis on utilise fviz_Cluster
+library(factoextra)
+# elle demande d'utiliser hcut qui appelle hclust + cutree
+hc.cut = hcut(seeds, k = 4, hc_method = "complete")
+sum(hc.cut$cluster!=cutree(res1,k=4)) #petite vérification
+
+# les 4 graphes. On remarque que l'axe 1 est en miroir par
+# rapport à notre programmation: 
+# suivant le type de méthode utiliser pour calculer les directions
+# propres u ou -u sont choisis
+# cela ne change pas l'interprétation
+
+plt =lapply(2:5, function(k) fviz_cluster(hcut(seeds, k = k, hc_method = "complete"),
+                                          main="complete"))
+cowplot::plot_grid(plt[[1]],plt[[2]],plt[[3]],plt[[4]],nrow=2,ncol=2)
+
+# dendrogram avec groupes:
+
+fviz_dend(hc.cut, show_labels = FALSE, rect = TRUE)
+
+########
+###---d- autre distance
+########
+res2 = hclust(dist(seeds),method="ward.D2")
+
+pltw =lapply(2:4, function(k) fviz_cluster(hcut(seeds, k = k, hc_method = "ward.D2"),
+                                           main="ward.D2"))
+cowplot::plot_grid(plt[[1]],plt[[2]],plt[[3]],
+                   pltw[[1]],pltw[[2]],pltw[[3]],nrow=2,ncol=3)
+
+# plot alluvial
+library(alluvial)
+alluvial(data.frame(complete=cutree(res1,k=4),
+                    wardD2=cutree(res2,k=4)), 
+         freq = rep(1,n), #col=2, 
+         col = c("red", "blue", "green","orange")[cutree(res1,k=4)])
 
 
-## on regarde maintenant les valeurs numériques
-### ii- contributions
-apply(Ind$contrib,2,which.max)   # le plus contributif sur chaque axe
-# Dim.1 Dim.2 Dim.3 Dim.4 Dim.5 
-# 89    19   204    60    60
-head(sort(Ind$contrib[, 1],decreasing=TRUE)) # les premiers contibutifs du premier axe
-#      89       90      115       78      109       91 
-#1.895966 1.863653 1.833128 1.652143 1.628947 1.628354 
-
-### iii- cosinus carré : qualité de représentration
-which.max(Ind$cos2[,2]) #58
-
-#######
-## d- plan (2,3)
-#######
-
-plt3 = plot(data_pca,axes = c(2,3), choix = "ind",label="none")+ 
-  aes(x=Ind$coord[indi,2], y=Ind$coord[indi,3]) +
-  geom_point(col="red", size=2)+
-  geom_text(label=indi,col=2,nudge_y = 0.1)
-plt4 = plot(data_pca,axes = c(2,3), choix = "var")
-cowplot::plot_grid(plt3,plt4)
-# points(Ind$coord[indi,2],Ind$coord[indi,3],col="red",pch=20)
-# text(data_pca$ind$coord[indi,2],data_pca$ind$coord[indi,3],as.character(indi),pos=3,cex=0.7,col=2)
-
-### i- contributif et mal représenté sur l'axe 3
-which(data_pca$ind$cos2[,3]<0.15 & data_pca$ind$contrib[,3]>1)
-# 84  89  91 117 129 158 
-# 84  89  91 117 129 158
-c(contrib=Ind$contrib[89,3],cos2= Ind$cos2[89,3])
-#    contrib       cos2 
-# 1.10679855 0.06613445 
-
-# globalement sur le plan (2,3)
-# contribution sur le plan: utiliser coord, car contrib normé à 100 par axe
-mean(data_pca$ind$coord[,2]^2+data_pca$ind$coord[,3]^2)  # 1.87 projection moyenne sur le plan
-mean(data_pca$ind$cos2[,2]+data_pca$ind$cos2[,3])        # 0.36 qualité de représentation sur la plan
-
-# on cherche des points de  qualité < moyenne et de contrib > moyenne
-
-indj = which(data_pca$ind$cos2[,2]+data_pca$ind$cos2[,3]<0.15 & (data_pca$ind$coord[,2]^2+data_pca$ind$coord[,3]^2)>2)
-plt1 = plt1 + 
-  geom_point(aes(x=Ind$coord[indj,1], y=Ind$coord[indj,2]), col="purple", size=2)+
-  geom_text(aes(x=Ind$coord[indj,1], y=Ind$coord[indj,2]), label=indj,col="purple",nudge_y = 0.1)
-plt3 = plt3 + 
-  geom_point(aes(x=Ind$coord[indj,2], y=Ind$coord[indj,3]), col="purple", size=2)+
-  geom_text(aes(x=Ind$coord[indj,2], y=Ind$coord[indj,3]), label=indj,col="purple",nudge_y = 0.1)
-cowplot::plot_grid(plt1,plt3)
+#comparaison numérique des partition avec l'index de Rand
+mclust::adjustedRandIndex(cutree(res2,k=4), cutree(res1,k=4))
 
 
-### ii. peu contributif mais bien représenté sur l'axe 2
-which(data_pca$ind$cos2[,2]>0.85 & data_pca$ind$contrib[,2]<0.25) #39
-c(contrib=Ind$contrib[39,2],cos2= Ind$cos2[39,2])
+########
+###---  centrer réduire?
+########
+seedscr = data.frame(scale(seeds))
+rescr = hclust(dist(seedscr),method="ward.D2")
+par(mfrow=c(1,2))
+barplot(rev(rescr$height)[1:15],main="diagramme des hauteurs")
+abline(h=15) 
 
-### iii.  contributif et bien représenté sur l'axe 2
-which(data_pca$ind$cos2[,2]>0.95 & data_pca$ind$contrib[,2]>0.85) #58
-c(contrib=Ind$contrib[58,2],cos2= Ind$cos2[58,2])
+# l'éboulis  définit trois groupes
+plot(rescr,cex=0.5) # dendrogramme
+abline(h=15)         # 3 classes
 
-### tous les plots
-# par(mfrow=c(2,2))
-cowplot::plot_grid(plt1, plt2, plt3, plt4, ncol = 2, nrow = 2)
+mclust::adjustedRandIndex(cutree(res2,k=3), cutree(rescr,k=3)) #0.68
+par(mfrow=c(1,1))
+alluvial(data.frame(brut=cutree(res2,k=3),
+                    reduit=cutree(rescr,k=3)), 
+         freq = rep(1,n), #col=2, 
+         col = c("red", "blue", "green","orange")[cutree(res2,k=3)])
 
-#######
-## e- Individus supplémentaidata_pca 
-#######
-### 
-# ici, points moyens de chaque variété
-df= as.data.frame(lapply(seeds,
-                         function(x){tapply(x,seeds$variety,mean)} 
-                         ))
-indsup= nrow(seeds)+ 1:3
-seeds[indsup,] = df
+# La standardisation évite que les variables à grande échelle domine pour la contruction des clusters. 
+mclust::adjustedRandIndex(cutree(rescr,k=3),variety)#0.79
+mclust::adjustedRandIndex(cutree(res2,k=3),variety) #0.71
 
-data_pca = PCA(seeds[,-p],  ind.sup=indsup, graph=FALSE)
-plt1 = plot(data_pca,axes=c(1,2),choix="ind",label="ind.sup")
-plt2 = plot(data_pca,axes=c(2,3),choix="ind",label="ind.sup")
-cowplot::plot_grid(plt1, plt2, nrow=1, ncol=2)
-
-#######
-## e- variable qualitative 
-#######
-
-seeds$variety = as.factor(seeds$variety)
-data_pca = PCA(seeds, quali.sup=p,graph=FALSE)
-plt1 = plot(data_pca,axes=c(1,2),choix="ind",label="quali", habillage=p) +
-  theme(legend.position = "none") +
-  geom_point(aes(x=data_pca$ind.sup$coord[,1], y=data_pca$ind.sup$coord[,2]), col="blue")
-plt2 = plot(data_pca,axes=c(2,3),choix="ind",label="quali", habillage=p) +
-  geom_point(aes(x=data_pca$ind.sup$coord[,2], y=data_pca$ind.sup$coord[,3]), col="blue")
-cowplot::plot_grid(plt1, plt2, nrow=1, ncol=2)
-
-# on vérifie que les individus supplémentaidata_pca cordata_pcapondent 
-# à la visualisation de la variable qualitative supplémentaire
-
-
-
-### Diagonaliser Corr et ne garder que les plus grandes vp
-### Projeter dans l'espace décorrelé
-### Eventuellement nuage des individus à la fin
-### Calculer les indicateurs
+########
+###---e- Clustering de variables
+########
+# on choisit une dissemblance adaptée aux variables
+dd = as.dist((1 - cor(seeds))/2)
+par(mfrow=c(1,1))
+plot(hclust(dd,method="ward.D2")) 
 
 
 
 
-### variables et cercles des corrélations
-V <- data_pca$var
-plot(data_pca, choix = "var")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Clustering par Classification hiérarchique ascendante
+
+
+###---a- cah: méthode "complete" par défaut avec distance euclidienne
+res1 <- hclust(dist(data[, -p]))
+dendrogramme <- ggdendrogram(res1, rotate = TRUE)
+print(dendrogramme)
+
+#cutree(res1, h = 6) # classification à une hauteur donnée
+#éboulis des hauteurs
+#barplot(rev(res1$height)[1:15], main = "diagramme des hauteurs")
+#abline(h = 6)
+# indice de silhouette
+#library(cluster)
+#sil = silhouette(cutree(res1,k=4), dist(data[, -p]))
+#mean(sil[,3])         # indice moyen 0.37
+#fviz_silhouette(sil)  # visualisation
+
+
+
 
