@@ -132,11 +132,14 @@ train <- sample(c(TRUE, FALSE), n, rep = TRUE, prob = c(2/3, 1/3))
 
 train_data <- data[train, ]
 test_data <- data[!train, ]
-pca_train <- PCA(train_data, quali.sup = which(names(data) == "Class"))
+pca_train <- PCA(data[, -p], ind.sup = which(!train)) #on indique déjà les individus de test pour le plot plus tard
 test_cr <- scale(test_data[, -p])
 test_proj <- predict(pca_train, newdata = test_cr)
 coord_test_proj <- test_proj$coord[, 1:2]
 entete_acp_partie2 <- head(test_proj)
+# 2. On crée un vecteur factor indiquant train vs test
+groupe <- factor(ifelse(train, "train", "test"))[train]
+ggsave("k.png", fviz_pca_ind(pca_train, habillage = groupe))
 
 ## Régression logistique
 
@@ -185,11 +188,8 @@ svm_poly <- svm(X_train, as.factor(y_train), kernel = "polynomial", degree = 3, 
 pred_poly <- predict(svm_poly, X_test, probability = TRUE)
 prob_svm_poly <- attr(pred_poly, "probabilities")[, 2]
 
-## ROC avec ROCR
+## ROC & AUC
 
-library(ROCR)
-
-png("f.png")
 preds <- list(
   Complet = prediction(prob_complet, y_test),
   PCA2    = prediction(prob_pca2,    y_test),
@@ -198,18 +198,48 @@ preds <- list(
   SVM_L   = prediction(prob_svm_lin, y_test),
   SVM_P   = prediction(prob_svm_poly, y_test)
 )
+cols <- seq_along(preds)
 
-cols <- 1:length(preds)
+#png("roc_comparaison.png")
 perf0 <- performance(preds[[1]], "tpr", "fpr")
-plot(perf0, col = cols[1], main = "ROC sur test (ROCR)")
-
-for (i in 1:length(preds)) {
-  perf_i <- performance(preds[[i]], "tpr", "fpr")
-  plot(perf_i, col = cols[i], add = TRUE)
+plot(perf0, col = cols[1], main = "ROC sur test")
+for(i in 2:length(preds)) {
+  plot(performance(preds[[i]], "tpr", "fpr"), col = cols[i], add = TRUE)
 }
-### Calcul des AUC
-aucs <- sapply(preds, function(pr) performance(pr, "auc")@y.values[[1]])
-labels <- paste(names(aucs), sprintf("(AUC=%.3f)", aucs))
-### Légende
-legend("bottomright", legend = labels, col = cols, lty = 1, cex = 0.8)
-dev.off()
+abline(0,1, lty = 2, col = "grey") # Base aléatoire
+aucs <- numeric(length(preds))
+names(aucs) <- names(preds)
+for (i in seq_along(preds)) {
+  perf_auc <- performance(preds[[i]], "auc")
+  auc_value <- perf_auc@y.values[[1]]
+  aucs[i] <- auc_value
+}
+legend("bottomright",
+       legend = paste(names(aucs), " (AUC=", sprintf("%.2f", aucs), ")"),
+       col = cols) # Légende avec AUC
+#dev.off()
+
+## Erreurs train & test
+
+models_probs <- list(
+  Complet = list(train = predict(modele_complet, type="response"), test = prob_complet),
+  PCA2    = list(train = predict(modele_pca2, newdata=as.data.frame(pca_premier_plan_individus), type="response"), test  = prob_pca2),
+  AIC     = list(train = predict(modele_AIC, type="response"), test = prob_aic),
+  Lasso   = list(train = as.vector(predict(modele_lasso, newx = X_train, type="response")), test  = prob_lasso),
+  SVM_L   = list(train = attr(predict(svm_lin, X_train, probability=TRUE), "probabilities")[,2], test  = prob_svm_lin),
+  SVM_P   = list(train = attr(predict(svm_poly, X_train, probability=TRUE), "probabilities")[,2], test  = prob_svm_poly)
+)
+errs <- sapply(models_probs, function(mp) {
+  c(train = mean((mp$train>0.5) != y_train),
+    test  = mean((mp$test >0.5) != y_test))
+}) # seuil à 0.5
+errs_df <- as.data.frame(t(errs))
+print(errs_df)
+
+## Barplot des erreurs test
+
+df_err <- data.frame(model = rownames(errs_df), test_error = errs_df$test)
+barplot_erreurs <- ggplot(df_err, aes(x = model, y = test_error)) +
+  geom_col(fill = "blue") +
+  labs(title = "Erreur test par modèle", y = "Erreur test")
+#ggsave("barplot_erreurs.png", barplot_erreurs)
